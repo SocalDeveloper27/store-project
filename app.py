@@ -228,7 +228,7 @@ def edit_item(barcode):
     return render_template('edit_item.html', item=item, error=None)
 
 @app.route('/delete/<barcode>')
-def delete_item(barcode):
+def delete_item_view(barcode):  # Renamed to avoid conflict
     """Handle deleting an item from the inventory."""
     try:
         item = InventoryItem.query.filter_by(barcode=barcode).first()
