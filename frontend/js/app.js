@@ -1,3 +1,69 @@
+// Add this at the beginning to debug initialization issues
+console.log("App.js loading...");
+
+// Make sure state object is defined
+if (typeof state === "undefined") {
+  console.log("Creating app state object");
+  window.state = {
+    currentView: "inventory",
+    inventory: [],
+    checkoutItems: [],
+    error: null,
+  };
+}
+
+// Make sure we have a proper initialization function
+document.addEventListener("DOMContentLoaded", function () {
+  console.log("DOM loaded, initializing app...");
+
+  // Initialize the app
+  initApp();
+});
+
+// Main initialization function
+function initApp() {
+  try {
+    console.log("Initializing app...");
+
+    // Set up navigation event listeners
+    document.getElementById("checkoutBtn").addEventListener("click", () => {
+      state.currentView = "checkout";
+      renderCurrentView();
+    });
+
+    document.getElementById("inventoryBtn").addEventListener("click", () => {
+      state.currentView = "inventory";
+      renderCurrentView();
+    });
+
+    // Initial view load - typically inventory or dashboard
+    state.currentView = "inventory"; // Default view
+    renderCurrentView();
+
+    // Hide the initial loading indicator
+    document.querySelector(".loading").style.display = "none";
+  } catch (error) {
+    console.error("Error initializing app:", error);
+    document.querySelector(".loading").textContent =
+      "Error loading app. See console for details.";
+  }
+}
+
+// Make sure renderCurrentView exists
+function renderCurrentView() {
+  console.log("Rendering view:", state.currentView);
+
+  if (state.currentView === "checkout") {
+    renderCheckoutView();
+  } else if (state.currentView === "inventory") {
+    renderInventoryView();
+  } else if (state.currentView === "addItem") {
+    renderAddItemView();
+  } else {
+    console.error("Unknown view:", state.currentView);
+  }
+}
+
 // Application state
 const state = {
   currentView: "inventory",
@@ -148,121 +214,100 @@ function stopCamera() {
 }
 
 // Render the inventory view
-function renderInventoryView() {
-  // Stop any active camera when switching to inventory view
-  if (window.cameraHandler) {
-    window.cameraHandler.stopCamera();
-  }
+async function renderInventoryView() {
+  console.log("Rendering inventory view");
 
-  if (state.inventory.length === 0) {
-    app.innerHTML = `
-      <div class="inventory-container">
-        <h1>Inventory</h1>
-        <div class="button-group">
-          <button class="button" id="addItemBtn">Add New Item</button>
-        </div>
-        <div class="empty-state">
-          <p>No items in inventory.</p>
-          <button class="button" id="emptyAddBtn">Add Your First Item</button>
-        </div>
-      </div>
-    `;
-    document
-      .getElementById("addItemBtn")
-      .addEventListener("click", () => navigateTo("addItem"));
-    document
-      .getElementById("emptyAddBtn")
-      .addEventListener("click", () => navigateTo("addItem"));
-    return;
-  }
-
-  let tableRows = state.inventory
-    .map(
-      (item) => `
-    <tr>
-      <td data-label="Name">${item.name}</td>
-      <td data-label="Barcode">${item.barcode}</td>
-      <td data-label="Quantity" class="${
-        item.quantity === 0
-          ? "out-of-stock"
-          : item.quantity < 5
-          ? "low-stock"
-          : ""
-      }">${item.quantity}</td>
-      <td data-label="Description" class="description-cell">${
-        item.description || ""
-      }</td>
-      <td data-label="Price">$${item.price.toFixed(2)}</td>
-      <td data-label="Actions" class="actions">
-        <button class="button button-secondary edit-btn" data-barcode="${
-          item.barcode
-        }">Edit</button>
-        <button class="button button-danger delete-btn" data-barcode="${
-          item.barcode
-        }">Delete</button>
-      </td>
-    </tr>
-  `
-    )
-    .join("");
-
+  // Show loading indicator
   app.innerHTML = `
-    <div class="inventory-container">
-      <h1>Inventory</h1>
-      <div class="button-group">
-        <button class="button" id="addItemBtn">Add New Item</button>
-      </div>
-      <table class="inventory-table responsive-table">
-        <thead>
-          <tr>
-            <th>Name</th>
-            <th>Barcode</th>
-            <th>Quantity</th>
-            <th>Description</th>
-            <th>Price</th>
-            <th>Actions</th>
-          </tr>
-        </thead>
-        <tbody>
-          ${tableRows}
-        </tbody>
-      </table>
-    </div>
+    <h2>Inventory</h2>
+    <div class="loading">Loading inventory...</div>
   `;
 
-  // Add event listeners to buttons
-  document
-    .getElementById("addItemBtn")
-    .addEventListener("click", () => navigateTo("addItem"));
+  try {
+    // Load inventory data from API
+    state.inventory = await window.api.getInventory();
 
-  document.querySelectorAll(".edit-btn").forEach((btn) => {
-    btn.addEventListener("click", () => {
-      const barcode = btn.getAttribute("data-barcode");
-      const item = state.inventory.find((i) => i.barcode === barcode);
-      navigateTo("editItem", item);
+    // Render inventory view with data
+    app.innerHTML = `
+      <h2>Inventory</h2>
+      <div class="button-group">
+        <button id="addItemBtn" class="button">Add New Item</button>
+        <button id="refreshInventoryBtn" class="button button-secondary">Refresh</button>
+      </div>
+      
+      <div class="inventory-container">
+        <table>
+          <thead>
+            <tr>
+              <th>Barcode</th>
+              <th>Name</th>
+              <th>Price</th>
+              <th>Actions</th>
+            </tr>
+          </thead>
+          <tbody id="inventory-items">
+            ${state.inventory
+              .map(
+                (item) => `
+              <tr>
+                <td>${item.barcode}</td>
+                <td>${item.name}</td>
+                <td>$${item.price.toFixed(2)}</td>
+                <td>
+                  <button class="button button-small delete-btn" data-barcode="${
+                    item.barcode
+                  }">Delete</button>
+                </td>
+              </tr>
+            `
+              )
+              .join("")}
+          </tbody>
+        </table>
+      </div>
+    `;
+
+    // Add event listeners for inventory view
+    document.getElementById("addItemBtn").addEventListener("click", () => {
+      state.currentView = "addItem";
+      renderCurrentView();
     });
-  });
 
-  document.querySelectorAll(".delete-btn").forEach((btn) => {
-    btn.addEventListener("click", async () => {
-      const barcode = btn.getAttribute("data-barcode");
-      if (confirm("Are you sure you want to delete this item?")) {
-        try {
-          btn.disabled = true;
-          btn.textContent = "Deleting...";
+    document
+      .getElementById("refreshInventoryBtn")
+      .addEventListener("click", () => {
+        renderInventoryView();
+      });
 
-          await window.api.deleteItem(barcode);
-          await loadInventory();
-        } catch (error) {
-          btn.disabled = false;
-          btn.textContent = "Delete";
-
-          state.error = `Failed to delete item: ${error.message}`;
-          renderCurrentView();
+    // Add event listeners for delete buttons
+    document.querySelectorAll(".delete-btn").forEach((btn) => {
+      btn.addEventListener("click", async () => {
+        const barcode = btn.getAttribute("data-barcode");
+        if (confirm("Are you sure you want to delete this item?")) {
+          try {
+            await window.api.deleteItem(barcode);
+            // Refresh inventory after delete
+            renderInventoryView();
+          } catch (error) {
+            alert(`Failed to delete item: ${error.message}`);
+          }
         }
-      }
+      });
     });
-  });
+  } catch (error) {
+    console.error("Error rendering inventory:", error);
+    app.innerHTML = `
+      <h2>Inventory</h2>
+      <div class="error-message">
+        Failed to load inventory. ${error.message}
+        <button id="retryBtn" class="button">Retry</button>
+      </div>
+    `;
+
+    document.getElementById("retryBtn").addEventListener("click", () => {
+      renderInventoryView();
+    });
+  }
 }
 
 // Render the checkout view

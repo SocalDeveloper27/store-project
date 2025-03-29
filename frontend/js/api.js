@@ -1,4 +1,4 @@
-// API URL - Change this to your deployed backend URL when deployed
+// Make sure API_BASE_URL is properly defined
 let API_BASE_URL = "https://store-project-api-h325.onrender.com";
 
 // For development/testing with a local backend
@@ -10,20 +10,33 @@ if (
   API_BASE_URL = "http://localhost:5000";
 }
 
-// API client for communicating with backend
+// API client with built-in error handling
 window.api = {
   // Get all inventory items
   async getInventory() {
     try {
-      const response = await fetch(`${API_BASE_URL}/api/inventory`);
+      console.log("Fetching inventory from:", API_BASE_URL);
+
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 10000); // 10 second timeout
+
+      const response = await fetch(`${API_BASE_URL}/api/inventory`, {
+        signal: controller.signal,
+      });
+
+      clearTimeout(timeoutId);
+
       if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.error || "Failed to fetch inventory");
+        console.error("Inventory API error:", response.status);
+        return []; // Return empty inventory on error
       }
-      return await response.json();
+
+      const data = await response.json();
+      console.log("Inventory loaded:", data.length, "items");
+      return data;
     } catch (error) {
       console.error("Error fetching inventory:", error);
-      throw error;
+      return []; // Return empty inventory on error
     }
   },
 

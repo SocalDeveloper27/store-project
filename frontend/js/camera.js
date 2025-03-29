@@ -1,3 +1,11 @@
+// Add this at the top to check if it's loaded
+console.log("Camera.js loading...");
+
+// Make sure we notify when module is ready
+document.addEventListener("DOMContentLoaded", function () {
+  console.log("Camera.js ready");
+});
+
 // Global variables to track camera state
 let activeCameraStream = null;
 let currentScanner = null;
