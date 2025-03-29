@@ -8,6 +8,9 @@ const state = {
   error: null,
 };
 
+// Add this to track active camera streams
+let activeCameraStream = null;
+
 // DOM elements
 const app = document.getElementById("app");
 const checkoutBtn = document.getElementById("checkoutBtn");
@@ -108,31 +111,39 @@ async function loadItem(barcode) {
 
 // Render the current view based on state
 function renderCurrentView() {
-  if (state.loading) {
-    app.innerHTML = '<div class="loading">Loading...</div>';
-    return;
+  // Stop any active camera first
+  stopCamera();
+
+  // Then render the appropriate view
+  if (state.currentView === "checkout") {
+    renderCheckoutView();
+  } else if (state.currentView === "inventory") {
+    renderInventoryView();
+  } else if (state.currentView === "addItem") {
+    renderAddItemView();
+  } else if (state.currentView === "editItem") {
+    renderEditItemView();
+  } else {
+    app.innerHTML = "<div>Page not found</div>";
+  }
+}
+
+// Add a function to stop camera
+function stopCamera() {
+  if (activeCameraStream) {
+    console.log("Stopping active camera stream");
+    activeCameraStream.getTracks().forEach((track) => track.stop());
+    activeCameraStream = null;
   }
 
-  if (state.error) {
-    app.innerHTML = `<div class="error-message">${state.error}</div>`;
-    return;
-  }
-
-  switch (state.currentView) {
-    case "inventory":
-      renderInventoryView();
-      break;
-    case "checkout":
-      renderCheckoutView();
-      break;
-    case "addItem":
-      renderAddItemView();
-      break;
-    case "editItem":
-      renderEditItemView();
-      break;
-    default:
-      app.innerHTML = "<div>Page not found</div>";
+  // Reset any global scanner objects
+  if (window.currentScanner) {
+    try {
+      window.currentScanner.reset();
+      window.currentScanner = null;
+    } catch (e) {
+      console.log("Error resetting scanner:", e);
+    }
   }
 }
 
@@ -251,21 +262,25 @@ function renderInventoryView() {
 
 // Render the checkout view
 function renderCheckoutView() {
+  // The HTML structure with the scanner frame added
   app.innerHTML = `
-    <div class="checkout-container">
-      <h1>Checkout</h1>
-      
-      <div id="scanner-container">
-        <video id="scanner-video"></video>
+    <h2>Checkout</h2>
+    
+    <!-- Add error message container -->
+    <div id="error-message" class="error-message"></div>
+    
+    <!-- Scanner with frame -->
+    <div class="scanner-container" id="scanner-container">
+      <video id="scanner-video" playsinline autoplay muted></video>
+      <div class="scanner-overlay">
+        <div class="scanner-guide"></div>
       </div>
-      
-      <div class="scan-prompt">
-        <p>Scan a barcode to add an item to the checkout list</p>
-      </div>
-      
-      <p id="error-message" class="error-message"></p>
-      
-      <table id="checkout-items" class="responsive-table">
+    </div>
+    <p class="scanner-help">Position barcode within the frame to scan</p>
+    
+    <!-- Rest of your checkout view -->
+    <div class="checkout-items">
+      <table>
         <thead>
           <tr>
             <th>Barcode</th>
@@ -275,52 +290,34 @@ function renderCheckoutView() {
             <th>Actions</th>
           </tr>
         </thead>
-        <tbody>
-          ${state.checkoutItems
-            .map(
-              (item, index) => `
-            <tr>
-              <td data-label="Barcode">${item.barcode}</td>
-              <td data-label="Name">${item.name}</td>
-              <td data-label="Quantity">${item.quantity}</td>
-              <td data-label="Price">$${item.price.toFixed(2)}</td>
-              <td data-label="Actions">
-                <button class="button button-danger remove-btn" data-index="${index}">Remove</button>
-              </td>
-            </tr>
-          `
-            )
-            .join("")}
+        <tbody id="checkout-items">
+          <!-- Checkout items will be inserted here -->
         </tbody>
       </table>
-      
-      <div class="checkout-total">
-        Total: $<span id="total-price">${calculateTotal().toFixed(2)}</span>
+      <div class="checkout-summary">
+        <span>Total: $<span id="checkout-total">0.00</span></span>
       </div>
-      
-      <button id="checkout-button" class="button" ${
-        state.checkoutItems.length === 0 ? "disabled" : ""
-      }>
-        Complete Checkout
-      </button>
+    </div>
+    
+    <div class="button-group">
+      <button id="complete-checkout-btn" class="button">Complete Checkout</button>
+      <button id="clear-checkout-btn" class="button button-secondary">Clear All</button>
     </div>
   `;
 
-  // Set up barcode scanner
+  // Set up event listeners
+  document
+    .getElementById("complete-checkout-btn")
+    .addEventListener("click", completeCheckout);
+  document
+    .getElementById("clear-checkout-btn")
+    .addEventListener("click", clearCheckout);
+
+  // Start the camera for barcode scanning
   setupBarcodeScanner();
 
-  // Add event listeners
-  document
-    .getElementById("checkout-button")
-    .addEventListener("click", completeCheckout);
-
-  document.querySelectorAll(".remove-btn").forEach((btn) => {
-    btn.addEventListener("click", () => {
-      const index = parseInt(btn.getAttribute("data-index"));
-      state.checkoutItems.splice(index, 1);
-      renderCheckoutView();
-    });
-  });
+  // Update checkout items display
+  updateCheckoutDisplay();
 }
 
 // Render the add item view
@@ -542,69 +539,51 @@ function renderEditItemView() {
 // Setup barcode scanner
 async function setupBarcodeScanner() {
   const videoElement = document.getElementById("scanner-video");
-  const errorElement =
-    document.querySelector(".error-message") || document.createElement("div");
-
   if (!videoElement) return;
 
-  // Add critical attributes for mobile browsers, especially iOS
-  videoElement.setAttribute("playsinline", "");
-  videoElement.setAttribute("autoplay", "");
-  videoElement.setAttribute("muted", "");
+  // Add critical attributes for mobile browsers
+  videoElement.setAttribute("playsinline", "true");
+  videoElement.setAttribute("autoplay", "true");
+  videoElement.setAttribute("muted", "true");
 
-  // Check if running in secure context (required for camera access)
-  if (!window.isSecureContext) {
-    console.error("Camera access requires HTTPS");
-    if (videoElement.parentNode) {
-      videoElement.parentNode.innerHTML = `
-        <div class="camera-error">
-          <p>Camera access requires a secure connection (HTTPS).</p>
-          <p>Please use a secure connection to enable the barcode scanner.</p>
-        </div>`;
-    }
-    return;
-  }
-
-  if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-    console.warn("getUserMedia() is not supported by your browser");
-    if (videoElement.parentNode) {
-      videoElement.parentNode.innerHTML = `
-        <div class="camera-error">
-          <p>Camera access not supported on your device.</p>
-          <p>Please enable camera access or use a different browser.</p>
-        </div>`;
-    }
-    return;
+  // Check if camera is already running
+  if (activeCameraStream) {
+    console.log("Camera already running, stopping previous stream");
+    stopCamera();
   }
 
   try {
-    console.log("Requesting camera access...");
+    console.log("Starting camera with environment facing mode...");
 
-    // For iOS 14.3+ and other mobile devices, prioritize back camera
+    // Use constraints optimized for barcode scanning
     const constraints = {
       audio: false,
       video: {
-        facingMode: { ideal: "environment" },
-        width: { ideal: 1280 },
-        height: { ideal: 720 },
+        facingMode: "environment", // Force back camera
+        width: { min: 640, ideal: 1280, max: 1920 },
+        height: { min: 480, ideal: 720, max: 1080 },
+        aspectRatio: { ideal: 16 / 9 },
+        focusMode: "continuous", // Request continuous autofocus if available
       },
     };
 
     const stream = await navigator.mediaDevices.getUserMedia(constraints);
+    console.log("Camera access granted");
+
+    // Save reference to stream for later cleanup
+    activeCameraStream = stream;
     videoElement.srcObject = stream;
 
-    // Listen for metadata loaded event to play the video
     videoElement.onloadedmetadata = () => {
-      // Use a promise to ensure play() succeeds
       videoElement
         .play()
         .then(() => {
-          console.log("Camera stream started successfully");
+          console.log("Video playback started, initializing barcode reader");
 
-          // Initialize barcode reader with a slight delay to ensure video is playing
+          // Initialize barcode reader after a delay
           setTimeout(() => {
             initBarcodeReader(videoElement);
-          }, 500);
+          }, 1000); // Increased delay for better initialization
         })
         .catch((error) => {
           console.error("Error starting video playback:", error);
@@ -612,60 +591,65 @@ async function setupBarcodeScanner() {
     };
   } catch (error) {
     console.error("Camera access error:", error);
-    if (videoElement.parentNode) {
-      videoElement.parentNode.innerHTML = `
-        <div class="camera-error">
-          <p>Unable to access camera: ${error.name}</p>
-          <p>Please ensure you've granted camera permission in your browser settings.</p>
-          ${
-            error.message ? `<p class="error-details">${error.message}</p>` : ""
-          }
-        </div>`;
-    }
+    // Error handling code...
   }
 }
 
-// Add this helper function to initialize the barcode reader
+// Update barcode reader initialization with more robust approach
 function initBarcodeReader(videoElement) {
+  console.log("Initializing barcode reader...");
+
   if (!window.ZXing) {
-    console.error("ZXing library not available");
+    console.error(
+      "ZXing library not found! Make sure it's loaded before this script."
+    );
     return;
   }
 
   try {
-    const reader = new ZXing.BrowserMultiFormatReader();
-    const hints = new Map();
-    hints.set(ZXing.DecodeHintType.TRY_HARDER, true);
+    console.log("Creating ZXing reader instance");
+    const codeReader = new ZXing.BrowserMultiFormatReader();
 
-    reader.decodeFromVideoElementContinuously(
+    console.log("Starting continuous decode");
+    codeReader.decodeFromVideoElementContinuously(
       videoElement,
-      (result, err) => {
+      (result, error) => {
         if (result) {
           const scannedBarcode = result.text.trim();
-          console.log("Barcode detected:", scannedBarcode);
-
-          // Add the item to checkout or fill the barcode input
-          if (state.currentView === "checkout") {
-            addItemToCheckout(scannedBarcode);
-          } else if (state.currentView === "addItem") {
-            const barcodeInput = document.getElementById("barcode");
-            if (barcodeInput) barcodeInput.value = scannedBarcode;
-          }
+          console.log("Successfully scanned barcode:", scannedBarcode);
 
           // Provide feedback
           if (navigator.vibrate) {
             navigator.vibrate(100);
           }
+
+          // Handle barcode based on current view
+          if (state.currentView === "checkout") {
+            addItemToCheckout(scannedBarcode);
+          } else if (state.currentView === "addItem") {
+            document.getElementById("barcode").value = scannedBarcode;
+
+            // Highlight the input field
+            const barcodeInput = document.getElementById("barcode");
+            barcodeInput.classList.add("scan-success");
+            setTimeout(
+              () => barcodeInput.classList.remove("scan-success"),
+              1500
+            );
+          }
         }
 
-        if (err && !(err instanceof ZXing.NotFoundException)) {
-          console.error("Barcode scanning error:", err);
+        if (error && !(error instanceof ZXing.NotFoundException)) {
+          console.error("Scanning error:", error);
         }
-      },
-      hints
+      }
     );
+
+    // Save scanner reference for cleanup
+    window.currentScanner = codeReader;
+    console.log("Continuous scanning started");
   } catch (error) {
-    console.error("Error initializing barcode scanner:", error);
+    console.error("Error initializing barcode reader:", error);
   }
 }
 
@@ -779,6 +763,44 @@ async function completeCheckout() {
     state.error = `Checkout failed: ${error.message}`;
     renderCurrentView();
   }
+}
+
+// Clear all items from checkout
+function clearCheckout() {
+  state.checkoutItems = [];
+  renderCheckoutView();
+}
+
+// Update checkout items display
+function updateCheckoutDisplay() {
+  const checkoutItemsContainer = document.getElementById("checkout-items");
+  const totalPriceElement = document.getElementById("checkout-total");
+
+  if (!checkoutItemsContainer || !totalPriceElement) return;
+
+  checkoutItemsContainer.innerHTML = state.checkoutItems
+    .map(
+      (item, index) => `
+      <tr>
+        <td>${item.barcode}</td>
+        <td>${item.name}</td>
+        <td>${item.quantity}</td>
+        <td>$${item.price.toFixed(2)}</td>
+        <td>
+          <button class="button button-danger" onclick="removeCheckoutItem(${index})">Remove</button>
+        </td>
+      </tr>
+    `
+    )
+    .join("");
+
+  totalPriceElement.textContent = calculateTotal().toFixed(2);
+}
+
+// Remove an item from checkout
+function removeCheckoutItem(index) {
+  state.checkoutItems.splice(index, 1);
+  updateCheckoutDisplay();
 }
 
 // Initialize the app when the DOM is fully loaded

@@ -146,7 +146,7 @@ tr:hover {
 }
 
 /* Scanner styling */
-#scanner-container {
+.scanner-container {
   width: 100%;
   max-width: 400px;
   height: 300px;
@@ -203,15 +203,15 @@ tr:hover {
 
 /* Visual feedback for successful scan */
 .scan-success {
-  background-color: #d4edda !important;
-  border-color: #c3e6cb !important;
+  background-color: rgba(76, 175, 80, 0.2) !important;
+  transition: background-color 0.3s;
   animation: flash 1s;
 }
 
 @keyframes flash {
   0%,
   100% {
-    background-color: #d4edda;
+    background-color: rgba(76, 175, 80, 0.2);
   }
   50% {
     background-color: #ffffff;
