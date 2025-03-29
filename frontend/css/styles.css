@@ -155,6 +155,7 @@ tr:hover {
   overflow: hidden;
   border-radius: 8px;
   border: 1px solid #ddd;
+  background-color: #000;
 }
 
 #scanner-video {
@@ -186,35 +187,33 @@ tr:hover {
 .scanner-help {
   text-align: center;
   color: #555;
-  margin-bottom: 15px;
+  margin-bottom: 10px;
+  font-size: 0.9em;
 }
 
-.camera-error {
-  padding: 20px;
+.scan-status {
   text-align: center;
-  background-color: #f8d7da;
-  color: #721c24;
-}
-
-.camera-error .error-details {
-  font-size: 0.8em;
-  margin-top: 10px;
+  background-color: #f5f5f5;
+  padding: 8px;
+  border-radius: 4px;
+  margin-bottom: 15px;
+  font-size: 0.9em;
 }
 
 /* Visual feedback for successful scan */
 .scan-success {
   background-color: rgba(76, 175, 80, 0.2) !important;
   transition: background-color 0.3s;
-  animation: flash 1s;
+  animation: pulse-green 0.8s;
 }
 
-@keyframes flash {
+@keyframes pulse-green {
   0%,
   100% {
     background-color: rgba(76, 175, 80, 0.2);
   }
   50% {
-    background-color: #ffffff;
+    background-color: rgba(76, 175, 80, 0.5);
   }
 }
 

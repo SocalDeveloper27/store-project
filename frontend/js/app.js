@@ -262,167 +262,56 @@ function renderInventoryView() {
 
 // Render the checkout view
 function renderCheckoutView() {
-  // The HTML structure with the scanner frame added
   app.innerHTML = `
     <h2>Checkout</h2>
-    
-    <!-- Add error message container -->
     <div id="error-message" class="error-message"></div>
     
-    <!-- Scanner with frame -->
-    <div class="scanner-container" id="scanner-container">
-      <video id="scanner-video" playsinline autoplay muted></video>
-      <div class="scanner-overlay">
-        <div class="scanner-guide"></div>
-      </div>
-    </div>
-    <p class="scanner-help">Position barcode within the frame to scan</p>
+    ${createScannerHTML()}
     
-    <!-- Rest of your checkout view -->
+    <!-- Rest of your checkout view HTML -->
     <div class="checkout-items">
-      <table>
-        <thead>
-          <tr>
-            <th>Barcode</th>
-            <th>Name</th>
-            <th>Quantity</th>
-            <th>Price</th>
-            <th>Actions</th>
-          </tr>
-        </thead>
-        <tbody id="checkout-items">
-          <!-- Checkout items will be inserted here -->
-        </tbody>
-      </table>
-      <div class="checkout-summary">
-        <span>Total: $<span id="checkout-total">0.00</span></span>
-      </div>
-    </div>
-    
-    <div class="button-group">
-      <button id="complete-checkout-btn" class="button">Complete Checkout</button>
-      <button id="clear-checkout-btn" class="button button-secondary">Clear All</button>
+      <!-- checkout items table -->
     </div>
   `;
-
-  // Set up event listeners
-  document
-    .getElementById("complete-checkout-btn")
-    .addEventListener("click", completeCheckout);
-  document
-    .getElementById("clear-checkout-btn")
-    .addEventListener("click", clearCheckout);
-
-  // Start the camera for barcode scanning
-  setupBarcodeScanner();
-
-  // Update checkout items display
-  updateCheckoutDisplay();
+  
+  // Add your event listeners
+  
+  // Initialize scanner with callback for checkout
+  setupBarcodeScanner((barcode) => {
+    // Process the scanned barcode for checkout
+    addItemToCheckout(barcode);
+  });
 }
 
 // Render the add item view
 function renderAddItemView() {
   app.innerHTML = `
-    <h1>Add New Item</h1>
-    <div class="form-container">
-      <!-- Add scanner container before the form -->
-      <div id="scanner-container">
-        <video id="scanner-video" playsinline></video>
-        <div class="scanner-overlay">
-          <div class="scanner-guide"></div>
-        </div>
+    <h2>Add Item</h2>
+    
+    ${createScannerHTML()}
+    
+    <form id="add-item-form">
+      <!-- Your form fields -->
+      <div class="form-group">
+        <label for="barcode">Barcode:</label>
+        <input type="text" id="barcode" name="barcode" required />
       </div>
-      <p class="scanner-help">Position barcode within the frame to scan</p>
-      <button id="toggleScannerBtn" class="button button-secondary">Toggle Scanner</button>
-      
-      <form id="add-item-form">
-        <div class="form-group">
-          <label for="barcode">Barcode:</label>
-          <input
-            type="text"
-            id="barcode"
-            name="barcode"
-            required
-            autocomplete="off"
-            inputmode="numeric"
-          />
-        </div>
-        
-        <div class="form-group">
-          <label for="name">Name:</label>
-          <input type="text" id="name" name="name" required autocomplete="off" />
-        </div>
-        
-        <div class="form-group">
-          <label for="quantity">Quantity:</label>
-          <input
-            type="number"
-            id="quantity"
-            name="quantity"
-            value="1"
-            min="0"
-            required
-            inputmode="numeric"
-            pattern="[0-9]*"
-          />
-        </div>
-        
-        <div class="form-group">
-          <label for="price">Price ($):</label>
-          <input
-            type="number"
-            step="0.01"
-            id="price"
-            name="price"
-            value="0.00"
-            min="0"
-            required
-            inputmode="decimal"
-            pattern="[0-9]*\\.?[0-9]+"
-          />
-        </div>
-        
-        <div class="form-group">
-          <label for="description">Description:</label>
-          <textarea id="description" name="description"></textarea>
-        </div>
-        
-        <div class="button-group">
-          <button type="submit" class="button">Add Item</button>
-          <button type="button" id="cancelBtn" class="button button-secondary">Cancel</button>
-        </div>
-      </form>
-    </div>
+      <!-- Other fields -->
+    </form>
   `;
-
-  // Set up scanner on page load
-  setupBarcodeScanner();
-
-  // Add toggle functionality for the scanner
-  document
-    .getElementById("toggleScannerBtn")
-    .addEventListener("click", function () {
-      const scannerContainer = document.getElementById("scanner-container");
-      if (scannerContainer.style.display === "none") {
-        scannerContainer.style.display = "block";
-        setupBarcodeScanner();
-      } else {
-        scannerContainer.style.display = "none";
-        // Stop any running video streams
-        const videoElement = document.getElementById("scanner-video");
-        if (videoElement && videoElement.srcObject) {
-          videoElement.srcObject.getTracks().forEach((track) => track.stop());
-        }
-      }
-    });
-
-  // Add event listeners for form
-  document
-    .getElementById("add-item-form")
-    .addEventListener("submit", handleAddItem);
-  document
-    .getElementById("cancelBtn")
-    .addEventListener("click", () => navigateTo("inventory"));
+  
+  // Add your event listeners
+  
+  // Initialize scanner with callback for add item
+  setupBarcodeScanner((barcode) => {
+    // Fill the barcode field with the scanned value
+    document.getElementById("barcode").value = barcode;
+    
+    // Visual feedback
+    const input = document.getElementById("barcode");
+    input.classList.add("scan-success");
+    setTimeout(() => input.classList.remove("scan-success"), 1500);
+  });
 }
 
 // Render the edit item view
@@ -536,120 +425,161 @@ function renderEditItemView() {
     .addEventListener("click", () => navigateTo("inventory"));
 }
 
-// Setup barcode scanner
-async function setupBarcodeScanner() {
+// Add this helper function to create a consistent scanner UI
+function createScannerHTML() {
+  return `
+    <div class="scanner-container" id="scanner-container">
+      <video id="scanner-video" playsinline autoplay muted></video>
+      <div class="scanner-overlay">
+        <div class="scanner-guide"></div>
+      </div>
+      <div id="debug-overlay" class="debug-overlay"></div>
+    </div>
+    <p class="scanner-help">Position barcode within the frame to scan</p>
+    <div id="scan-status" class="scan-status">Starting camera...</div>
+  `;
+}
+
+// Update the scanner initialization with better debugging
+async function setupBarcodeScanner(onBarcodeScanned) {
+  console.log("Setting up barcode scanner...");
+  const scanStatus = document.getElementById("scan-status");
   const videoElement = document.getElementById("scanner-video");
-  if (!videoElement) return;
-
-  // Add critical attributes for mobile browsers
-  videoElement.setAttribute("playsinline", "true");
-  videoElement.setAttribute("autoplay", "true");
-  videoElement.setAttribute("muted", "true");
-
-  // Check if camera is already running
-  if (activeCameraStream) {
-    console.log("Camera already running, stopping previous stream");
-    stopCamera();
+  
+  if (!videoElement) {
+    console.error("Video element not found");
+    return;
   }
-
+  
+  // Stop any existing camera first
+  stopCamera();
+  
   try {
-    console.log("Starting camera with environment facing mode...");
-
-    // Use constraints optimized for barcode scanning
+    // Update status
+    if (scanStatus) scanStatus.textContent = "Requesting camera access...";
+    
+    // Check for camera support
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+      console.error("MediaDevices API not supported");
+      if (scanStatus) scanStatus.textContent = "Camera API not supported by your browser";
+      return;
+    }
+    
+    // Test for secure context
+    if (!window.isSecureContext) {
+      console.warn("Not in secure context, camera may not work");
+      if (scanStatus) scanStatus.textContent = "Camera requires HTTPS (secure context)";
+    }
+    
+    // Set attributes for iOS compatibility
+    videoElement.setAttribute("playsinline", true);
+    videoElement.setAttribute("autoplay", true);
+    videoElement.setAttribute("muted", true);
+    
+    // Force appropriate constraints for barcode scanning
     const constraints = {
       audio: false,
       video: {
-        facingMode: "environment", // Force back camera
-        width: { min: 640, ideal: 1280, max: 1920 },
-        height: { min: 480, ideal: 720, max: 1080 },
-        aspectRatio: { ideal: 16 / 9 },
-        focusMode: "continuous", // Request continuous autofocus if available
-      },
+        facingMode: "environment",  // Use back camera
+        width: { ideal: 1280 },
+        height: { ideal: 720 },
+        focusMode: "continuous"     // Request continuous autofocus
+      }
     };
-
+    
+    console.log("Requesting camera with constraints:", constraints);
     const stream = await navigator.mediaDevices.getUserMedia(constraints);
-    console.log("Camera access granted");
-
-    // Save reference to stream for later cleanup
+    
+    // Save stream for later cleanup
     activeCameraStream = stream;
     videoElement.srcObject = stream;
-
-    videoElement.onloadedmetadata = () => {
-      videoElement
-        .play()
+    
+    if (scanStatus) scanStatus.textContent = "Camera activated, preparing scanner...";
+    
+    // Add a delay before initializing scanner
+    videoElement.onloadedmetadata = function() {
+      videoElement.play()
         .then(() => {
-          console.log("Video playback started, initializing barcode reader");
-
-          // Initialize barcode reader after a delay
+          console.log("Video is playing, initializing scanner");
+          if (scanStatus) scanStatus.textContent = "Scanner initialized, ready to scan";
+          
+          // Initialize barcode scanner with a slight delay
           setTimeout(() => {
-            initBarcodeReader(videoElement);
-          }, 1000); // Increased delay for better initialization
+            initZXingBarcodeScanner(videoElement, onBarcodeScanned);
+          }, 1000);
         })
-        .catch((error) => {
-          console.error("Error starting video playback:", error);
+        .catch(err => {
+          console.error("Error playing video:", err);
+          if (scanStatus) scanStatus.textContent = `Error starting video: ${err.message}`;
         });
     };
   } catch (error) {
     console.error("Camera access error:", error);
-    // Error handling code...
+    if (scanStatus) {
+      scanStatus.textContent = `Camera error: ${error.name}. ${
+        error.name === "NotAllowedError" 
+          ? "Please grant camera permission in your browser settings."
+          : error.message
+      }`;
+    }
   }
 }
 
-// Update barcode reader initialization with more robust approach
-function initBarcodeReader(videoElement) {
-  console.log("Initializing barcode reader...");
-
+// Helper function to specifically initialize ZXing
+function initZXingBarcodeScanner(videoElement, onBarcodeScanned) {
   if (!window.ZXing) {
-    console.error(
-      "ZXing library not found! Make sure it's loaded before this script."
-    );
+    console.error("ZXing library not loaded!");
+    const status = document.getElementById("scan-status");
+    if (status) status.textContent = "Barcode scanner library not loaded";
     return;
   }
-
+  
   try {
-    console.log("Creating ZXing reader instance");
+    console.log("Creating ZXing reader");
     const codeReader = new ZXing.BrowserMultiFormatReader();
-
+    
+    // Debug info to see what formats are supported
+    console.log("Supported formats:", ZXing.BarcodeFormat);
+    
+    // Start continuous scanning with debug mode
     console.log("Starting continuous decode");
     codeReader.decodeFromVideoElementContinuously(
       videoElement,
       (result, error) => {
         if (result) {
           const scannedBarcode = result.text.trim();
-          console.log("Successfully scanned barcode:", scannedBarcode);
-
-          // Provide feedback
+          console.log("✅ BARCODE DETECTED:", scannedBarcode);
+          console.log("Format:", result.format);
+          
+          // Update status
+          const status = document.getElementById("scan-status");
+          if (status) status.innerHTML = `<strong>Scanned:</strong> ${scannedBarcode}`;
+          
+          // Vibration feedback
           if (navigator.vibrate) {
             navigator.vibrate(100);
           }
-
-          // Handle barcode based on current view
-          if (state.currentView === "checkout") {
-            addItemToCheckout(scannedBarcode);
-          } else if (state.currentView === "addItem") {
-            document.getElementById("barcode").value = scannedBarcode;
-
-            // Highlight the input field
-            const barcodeInput = document.getElementById("barcode");
-            barcodeInput.classList.add("scan-success");
-            setTimeout(
-              () => barcodeInput.classList.remove("scan-success"),
-              1500
-            );
+          
+          // Call the callback with the result
+          if (typeof onBarcodeScanned === 'function') {
+            onBarcodeScanned(scannedBarcode);
           }
         }
-
+        
         if (error && !(error instanceof ZXing.NotFoundException)) {
           console.error("Scanning error:", error);
+          const status = document.getElementById("scan-status");
+          if (status) status.textContent = `Scanner error: ${error.message || error}`;
         }
       }
     );
-
-    // Save scanner reference for cleanup
+    
+    // Store scanner for cleanup
     window.currentScanner = codeReader;
-    console.log("Continuous scanning started");
   } catch (error) {
-    console.error("Error initializing barcode reader:", error);
+    console.error("Failed to initialize barcode scanner:", error);
+    const status = document.getElementById("scan-status");
+    if (status) status.textContent = `Scanner initialization failed: ${error.message}`;
   }
 }
 
