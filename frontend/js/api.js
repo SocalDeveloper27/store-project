@@ -11,7 +11,7 @@ if (
 }
 
 // API client for communicating with backend
-const api = {
+window.api = {
   // Get all inventory items
   async getInventory() {
     try {
@@ -122,6 +122,3 @@ const api = {
     }
   },
 };
-
-// Export the API object
-export default api;

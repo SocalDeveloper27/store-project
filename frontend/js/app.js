@@ -1,5 +1,3 @@
-import api from "./api.js";
-
 // Application state
 const state = {
   currentView: "inventory",
@@ -82,7 +80,7 @@ async function loadInventory() {
   renderCurrentView();
 
   try {
-    state.inventory = await api.getInventory();
+    state.inventory = await window.api.getInventory();
     state.loading = false;
     renderCurrentView();
   } catch (error) {
@@ -98,7 +96,7 @@ async function loadItem(barcode) {
   renderCurrentView();
 
   try {
-    state.currentItem = await api.getItem(barcode);
+    state.currentItem = await window.api.getItem(barcode);
     state.loading = false;
     renderCurrentView();
   } catch (error) {
@@ -234,7 +232,7 @@ function renderInventoryView() {
       const barcode = btn.getAttribute("data-barcode");
       if (confirm("Are you sure you want to delete this item?")) {
         try {
-          await api.deleteItem(barcode);
+          await window.api.deleteItem(barcode);
           await loadInventory();
         } catch (error) {
           state.error = `Failed to delete item: ${error.message}`;
@@ -490,7 +488,7 @@ function renderEditItemView() {
   document.getElementById("deleteBtn").addEventListener("click", async () => {
     if (confirm("Are you sure you want to delete this item?")) {
       try {
-        await api.deleteItem(state.currentItem.barcode);
+        await window.api.deleteItem(state.currentItem.barcode);
         navigateTo("inventory");
         await loadInventory();
       } catch (error) {
@@ -629,7 +627,7 @@ async function handleAddItem(e) {
   };
 
   try {
-    await api.addItem(newItem);
+    await window.api.addItem(newItem);
     await loadInventory();
     navigateTo("inventory");
   } catch (error) {
@@ -651,7 +649,7 @@ async function handleEditItem(e) {
   };
 
   try {
-    await api.updateItem(state.currentItem.barcode, updatedItem);
+    await window.api.updateItem(state.currentItem.barcode, updatedItem);
     await loadInventory();
     navigateTo("inventory");
   } catch (error) {
@@ -671,7 +669,7 @@ async function completeCheckout() {
     button.disabled = true;
     button.textContent = "Processing...";
 
-    await api.checkout(state.checkoutItems);
+    await window.api.checkout(state.checkoutItems);
 
     // Reset checkout items
     state.checkoutItems = [];
