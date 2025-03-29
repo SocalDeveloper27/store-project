@@ -1,5 +1,5 @@
 // API URL - Change this to your deployed backend URL when deployed
-const API_BASE_URL = "https://your-backend-api-url.com";
+const API_BASE_URL = "https://store-project-api-h325.onrender.com";
 
 // API client for communicating with backend
 const api = {
