@@ -232,9 +232,15 @@ function renderInventoryView() {
       const barcode = btn.getAttribute("data-barcode");
       if (confirm("Are you sure you want to delete this item?")) {
         try {
+          btn.disabled = true;
+          btn.textContent = "Deleting...";
+
           await window.api.deleteItem(barcode);
           await loadInventory();
         } catch (error) {
+          btn.disabled = false;
+          btn.textContent = "Delete";
+
           state.error = `Failed to delete item: ${error.message}`;
           renderCurrentView();
         }
@@ -536,171 +542,131 @@ function renderEditItemView() {
 // Setup barcode scanner
 async function setupBarcodeScanner() {
   const videoElement = document.getElementById("scanner-video");
-  const errorElement = document.getElementById("error-message");
+  const errorElement =
+    document.querySelector(".error-message") || document.createElement("div");
 
   if (!videoElement) return;
 
-  if (navigator.mediaDevices) {
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({
-        video: {
-          facingMode: "environment",
-          width: { ideal: 1280 },
-          height: { ideal: 720 },
-        },
-      });
-      videoElement.srcObject = stream;
+  // Add critical attributes for mobile browsers, especially iOS
+  videoElement.setAttribute("playsinline", "");
+  videoElement.setAttribute("autoplay", "");
+  videoElement.setAttribute("muted", "");
 
-      videoElement.onloadedmetadata = () => {
-        videoElement.play();
-
-        // If ZXing library is available, start scanning
-        if (window.ZXing) {
-          const reader = new ZXing.BrowserBarcodeReader();
-          const hints = new Map();
-          hints.set(ZXing.DecodeHintType.TRY_HARDER, true);
-
-          reader.decodeFromVideoElementContinuously(
-            videoElement,
-            (result, err) => {
-              if (result) {
-                const scannedBarcode = result.text.trim();
-                addItemToCheckout(scannedBarcode);
-
-                // Add vibration feedback on mobile
-                if (navigator.vibrate) {
-                  navigator.vibrate(100);
-                }
-              }
-
-              if (err && !(err instanceof ZXing.NotFoundException)) {
-                console.error("Barcode scanning error:", err);
-              }
-            },
-            hints
-          );
-        } else {
-          errorElement.textContent = "Barcode scanning library not loaded.";
-        }
-      };
-    } catch (error) {
-      console.error("Error accessing camera:", error);
-      if (videoElement.parentNode) {
-        videoElement.parentNode.innerHTML = `
-          <p style="padding:15px;text-align:center;">
-            Error accessing camera. Please ensure your browser has permission to access the camera.
-          </p>
-        `;
-      }
-    }
-  } else {
-    console.warn("getUserMedia() is not supported by your browser");
+  // Check if running in secure context (required for camera access)
+  if (!window.isSecureContext) {
+    console.error("Camera access requires HTTPS");
     if (videoElement.parentNode) {
       videoElement.parentNode.innerHTML = `
-        <p style="padding:15px;text-align:center;">
-          Camera access not supported on your device.
-        </p>
-      `;
+        <div class="camera-error">
+          <p>Camera access requires a secure connection (HTTPS).</p>
+          <p>Please use a secure connection to enable the barcode scanner.</p>
+        </div>`;
     }
+    return;
   }
-}
 
-// Add this function to enable continuous scanning
-function setupContinuousScanner(onBarcodeScanned) {
-  const videoElement = document.getElementById("scanner-video");
-  if (!videoElement) return null;
-
-  // Use a status message if available
-  const statusElement = document.querySelector(".scanner-help");
-  if (statusElement) statusElement.textContent = "Accessing camera...";
-
-  if (navigator.mediaDevices) {
-    navigator.mediaDevices
-      .getUserMedia({
-        video: {
-          facingMode: "environment",
-          width: { ideal: 1280 },
-          height: { ideal: 720 },
-        },
-      })
-      .then(function (stream) {
-        videoElement.srcObject = stream;
-        videoElement.onloadedmetadata = function () {
-          videoElement.play();
-          if (statusElement)
-            statusElement.textContent =
-              "Camera ready. Position barcode within frame.";
-
-          if (window.ZXing) {
-            const codeReader = new ZXing.BrowserMultiFormatReader();
-
-            codeReader.decodeFromVideoElementContinuously(
-              videoElement,
-              (result, err) => {
-                if (result) {
-                  const scannedBarcode = result.text.trim();
-                  console.log("Barcode scanned:", scannedBarcode);
-
-                  // Call the callback with the scanned barcode
-                  if (typeof onBarcodeScanned === "function") {
-                    onBarcodeScanned(scannedBarcode);
-                  }
-
-                  // Add haptic feedback
-                  if (navigator.vibrate) {
-                    navigator.vibrate(100);
-                  }
-                }
-
-                if (err && !(err instanceof ZXing.NotFoundException)) {
-                  console.error("Continuous scanning error:", err);
-                }
-              }
-            );
-
-            return codeReader;
-          } else {
-            console.error("ZXing library not loaded");
-            if (statusElement)
-              statusElement.textContent = "Barcode scanner not available";
-            return null;
-          }
-        };
-      })
-      .catch(function (error) {
-        console.error("Error accessing camera:", error);
-        if (videoElement.parentNode) {
-          videoElement.parentNode.innerHTML = `
-          <div class="camera-error">
-            <p>Unable to access camera.</p>
-            <p class="error-details">${error.name}: ${error.message}</p>
-            <p>Make sure you've granted camera permission and are using HTTPS.</p>
-          </div>
-        `;
-        }
-        return null;
-      });
-  } else {
+  if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
     console.warn("getUserMedia() is not supported by your browser");
     if (videoElement.parentNode) {
       videoElement.parentNode.innerHTML = `
         <div class="camera-error">
           <p>Camera access not supported on your device.</p>
-          <p>Please enter the barcode manually.</p>
-        </div>
-      `;
+          <p>Please enable camera access or use a different browser.</p>
+        </div>`;
     }
-    return null;
+    return;
   }
 
-  // Return an object with a reset method
-  return {
-    reset: function () {
-      if (videoElement && videoElement.srcObject) {
-        videoElement.srcObject.getTracks().forEach((track) => track.stop());
-      }
-    },
-  };
+  try {
+    console.log("Requesting camera access...");
+
+    // For iOS 14.3+ and other mobile devices, prioritize back camera
+    const constraints = {
+      audio: false,
+      video: {
+        facingMode: { ideal: "environment" },
+        width: { ideal: 1280 },
+        height: { ideal: 720 },
+      },
+    };
+
+    const stream = await navigator.mediaDevices.getUserMedia(constraints);
+    videoElement.srcObject = stream;
+
+    // Listen for metadata loaded event to play the video
+    videoElement.onloadedmetadata = () => {
+      // Use a promise to ensure play() succeeds
+      videoElement
+        .play()
+        .then(() => {
+          console.log("Camera stream started successfully");
+
+          // Initialize barcode reader with a slight delay to ensure video is playing
+          setTimeout(() => {
+            initBarcodeReader(videoElement);
+          }, 500);
+        })
+        .catch((error) => {
+          console.error("Error starting video playback:", error);
+        });
+    };
+  } catch (error) {
+    console.error("Camera access error:", error);
+    if (videoElement.parentNode) {
+      videoElement.parentNode.innerHTML = `
+        <div class="camera-error">
+          <p>Unable to access camera: ${error.name}</p>
+          <p>Please ensure you've granted camera permission in your browser settings.</p>
+          ${
+            error.message ? `<p class="error-details">${error.message}</p>` : ""
+          }
+        </div>`;
+    }
+  }
+}
+
+// Add this helper function to initialize the barcode reader
+function initBarcodeReader(videoElement) {
+  if (!window.ZXing) {
+    console.error("ZXing library not available");
+    return;
+  }
+
+  try {
+    const reader = new ZXing.BrowserMultiFormatReader();
+    const hints = new Map();
+    hints.set(ZXing.DecodeHintType.TRY_HARDER, true);
+
+    reader.decodeFromVideoElementContinuously(
+      videoElement,
+      (result, err) => {
+        if (result) {
+          const scannedBarcode = result.text.trim();
+          console.log("Barcode detected:", scannedBarcode);
+
+          // Add the item to checkout or fill the barcode input
+          if (state.currentView === "checkout") {
+            addItemToCheckout(scannedBarcode);
+          } else if (state.currentView === "addItem") {
+            const barcodeInput = document.getElementById("barcode");
+            if (barcodeInput) barcodeInput.value = scannedBarcode;
+          }
+
+          // Provide feedback
+          if (navigator.vibrate) {
+            navigator.vibrate(100);
+          }
+        }
+
+        if (err && !(err instanceof ZXing.NotFoundException)) {
+          console.error("Barcode scanning error:", err);
+        }
+      },
+      hints
+    );
+  } catch (error) {
+    console.error("Error initializing barcode scanner:", error);
+  }
 }
 
 // Add item to checkout list

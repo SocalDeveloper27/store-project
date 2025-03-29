@@ -6,3 +6,15 @@
   from = "/*"
   to = "/index.html"
   status = 200
+
+[[headers]]
+  for = "/*"
+  [headers.values]
+    Content-Security-Policy = "default-src * 'self' 'unsafe-inline' 'unsafe-eval' data: blob:; camera 'self'"
+    Feature-Policy = "camera 'self'"
+    Permissions-Policy = "camera=self"
+
+[[headers]]
+  for = "*.js"
+  [headers.values]
+    Content-Type = "application/javascript"

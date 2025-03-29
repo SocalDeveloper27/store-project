@@ -145,21 +145,77 @@ tr:hover {
   border-radius: 4px;
 }
 
+/* Scanner styling */
 #scanner-container {
   width: 100%;
   max-width: 400px;
   height: 300px;
-  border: 1px solid var(--border-color);
-  margin-bottom: 20px;
-  overflow: hidden;
+  margin: 0 auto 20px;
   position: relative;
+  overflow: hidden;
   border-radius: 8px;
+  border: 1px solid #ddd;
 }
 
 #scanner-video {
   width: 100%;
   height: 100%;
   object-fit: cover;
+}
+
+.scanner-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+}
+
+.scanner-guide {
+  width: 200px;
+  height: 100px;
+  border: 2px solid rgba(76, 175, 80, 0.7);
+  border-radius: 8px;
+  box-shadow: 0 0 0 9999px rgba(0, 0, 0, 0.5);
+}
+
+.scanner-help {
+  text-align: center;
+  color: #555;
+  margin-bottom: 15px;
+}
+
+.camera-error {
+  padding: 20px;
+  text-align: center;
+  background-color: #f8d7da;
+  color: #721c24;
+}
+
+.camera-error .error-details {
+  font-size: 0.8em;
+  margin-top: 10px;
+}
+
+/* Visual feedback for successful scan */
+.scan-success {
+  background-color: #d4edda !important;
+  border-color: #c3e6cb !important;
+  animation: flash 1s;
+}
+
+@keyframes flash {
+  0%,
+  100% {
+    background-color: #d4edda;
+  }
+  50% {
+    background-color: #ffffff;
+  }
 }
 
 /* Mobile responsive adjustments */
