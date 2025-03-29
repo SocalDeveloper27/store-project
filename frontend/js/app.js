@@ -608,33 +608,99 @@ async function setupBarcodeScanner() {
 // Add this function to enable continuous scanning
 function setupContinuousScanner(onBarcodeScanned) {
   const videoElement = document.getElementById("scanner-video");
-  if (!videoElement || !window.ZXing) return;
+  if (!videoElement) return null;
 
-  const codeReader = new ZXing.BrowserMultiFormatReader();
+  // Use a status message if available
+  const statusElement = document.querySelector(".scanner-help");
+  if (statusElement) statusElement.textContent = "Accessing camera...";
 
-  codeReader.decodeFromVideoElementContinuously(videoElement, (result, err) => {
-    if (result) {
-      const scannedBarcode = result.text.trim();
-      console.log("Barcode scanned:", scannedBarcode);
+  if (navigator.mediaDevices) {
+    navigator.mediaDevices
+      .getUserMedia({
+        video: {
+          facingMode: "environment",
+          width: { ideal: 1280 },
+          height: { ideal: 720 },
+        },
+      })
+      .then(function (stream) {
+        videoElement.srcObject = stream;
+        videoElement.onloadedmetadata = function () {
+          videoElement.play();
+          if (statusElement)
+            statusElement.textContent =
+              "Camera ready. Position barcode within frame.";
 
-      // Call the callback with the scanned barcode
-      if (typeof onBarcodeScanned === "function") {
-        onBarcodeScanned(scannedBarcode);
-      }
+          if (window.ZXing) {
+            const codeReader = new ZXing.BrowserMultiFormatReader();
 
-      // Add haptic feedback
-      if (navigator.vibrate) {
-        navigator.vibrate(100);
-      }
+            codeReader.decodeFromVideoElementContinuously(
+              videoElement,
+              (result, err) => {
+                if (result) {
+                  const scannedBarcode = result.text.trim();
+                  console.log("Barcode scanned:", scannedBarcode);
+
+                  // Call the callback with the scanned barcode
+                  if (typeof onBarcodeScanned === "function") {
+                    onBarcodeScanned(scannedBarcode);
+                  }
+
+                  // Add haptic feedback
+                  if (navigator.vibrate) {
+                    navigator.vibrate(100);
+                  }
+                }
+
+                if (err && !(err instanceof ZXing.NotFoundException)) {
+                  console.error("Continuous scanning error:", err);
+                }
+              }
+            );
+
+            return codeReader;
+          } else {
+            console.error("ZXing library not loaded");
+            if (statusElement)
+              statusElement.textContent = "Barcode scanner not available";
+            return null;
+          }
+        };
+      })
+      .catch(function (error) {
+        console.error("Error accessing camera:", error);
+        if (videoElement.parentNode) {
+          videoElement.parentNode.innerHTML = `
+          <div class="camera-error">
+            <p>Unable to access camera.</p>
+            <p class="error-details">${error.name}: ${error.message}</p>
+            <p>Make sure you've granted camera permission and are using HTTPS.</p>
+          </div>
+        `;
+        }
+        return null;
+      });
+  } else {
+    console.warn("getUserMedia() is not supported by your browser");
+    if (videoElement.parentNode) {
+      videoElement.parentNode.innerHTML = `
+        <div class="camera-error">
+          <p>Camera access not supported on your device.</p>
+          <p>Please enter the barcode manually.</p>
+        </div>
+      `;
     }
+    return null;
+  }
 
-    if (err && !(err instanceof ZXing.NotFoundException)) {
-      console.error("Continuous scanning error:", err);
-    }
-  });
-
-  // Return the code reader so it can be closed later
-  return codeReader;
+  // Return an object with a reset method
+  return {
+    reset: function () {
+      if (videoElement && videoElement.srcObject) {
+        videoElement.srcObject.getTracks().forEach((track) => track.stop());
+      }
+    },
+  };
 }
 
 // Add item to checkout list
