@@ -322,6 +322,16 @@ function renderAddItemView() {
   app.innerHTML = `
     <h1>Add New Item</h1>
     <div class="form-container">
+      <!-- Add scanner container before the form -->
+      <div id="scanner-container">
+        <video id="scanner-video" playsinline></video>
+        <div class="scanner-overlay">
+          <div class="scanner-guide"></div>
+        </div>
+      </div>
+      <p class="scanner-help">Position barcode within the frame to scan</p>
+      <button id="toggleScannerBtn" class="button button-secondary">Toggle Scanner</button>
+      
       <form id="add-item-form">
         <div class="form-group">
           <label for="barcode">Barcode:</label>
@@ -382,7 +392,28 @@ function renderAddItemView() {
     </div>
   `;
 
-  // Add event listeners
+  // Set up scanner on page load
+  setupBarcodeScanner();
+
+  // Add toggle functionality for the scanner
+  document
+    .getElementById("toggleScannerBtn")
+    .addEventListener("click", function () {
+      const scannerContainer = document.getElementById("scanner-container");
+      if (scannerContainer.style.display === "none") {
+        scannerContainer.style.display = "block";
+        setupBarcodeScanner();
+      } else {
+        scannerContainer.style.display = "none";
+        // Stop any running video streams
+        const videoElement = document.getElementById("scanner-video");
+        if (videoElement && videoElement.srcObject) {
+          videoElement.srcObject.getTracks().forEach((track) => track.stop());
+        }
+      }
+    });
+
+  // Add event listeners for form
   document
     .getElementById("add-item-form")
     .addEventListener("submit", handleAddItem);
@@ -572,6 +603,38 @@ async function setupBarcodeScanner() {
       `;
     }
   }
+}
+
+// Add this function to enable continuous scanning
+function setupContinuousScanner(onBarcodeScanned) {
+  const videoElement = document.getElementById("scanner-video");
+  if (!videoElement || !window.ZXing) return;
+
+  const codeReader = new ZXing.BrowserMultiFormatReader();
+
+  codeReader.decodeFromVideoElementContinuously(videoElement, (result, err) => {
+    if (result) {
+      const scannedBarcode = result.text.trim();
+      console.log("Barcode scanned:", scannedBarcode);
+
+      // Call the callback with the scanned barcode
+      if (typeof onBarcodeScanned === "function") {
+        onBarcodeScanned(scannedBarcode);
+      }
+
+      // Add haptic feedback
+      if (navigator.vibrate) {
+        navigator.vibrate(100);
+      }
+    }
+
+    if (err && !(err instanceof ZXing.NotFoundException)) {
+      console.error("Continuous scanning error:", err);
+    }
+  });
+
+  // Return the code reader so it can be closed later
+  return codeReader;
 }
 
 // Add item to checkout list
