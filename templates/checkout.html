@@ -1,0 +1,353 @@
+{% extends "base.html" %} {% block title %}Checkout{% endblock %} {% block head
+%}
+<style>
+  /* Additional styles specific to checkout page */
+  .checkout-container {
+    max-width: 800px;
+    margin: 0 auto;
+  }
+
+  #scanner-container {
+    width: 100%;
+    max-width: 600px;
+    height: 300px;
+    border: 1px solid #ccc;
+    margin: 0 auto 20px;
+    border-radius: 8px;
+    overflow: hidden;
+    position: relative;
+  }
+
+  #scanner-video {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+  }
+
+  .scan-prompt {
+    background-color: #e3f2fd;
+    border-left: 4px solid #2196f3;
+    padding: 10px 15px;
+    margin: 15px 0;
+    border-radius: 4px;
+  }
+
+  .checkout-total {
+    font-size: 1.2rem;
+    font-weight: bold;
+    text-align: right;
+    margin: 20px 0;
+    padding: 10px;
+    background-color: #f5f5f5;
+    border-radius: 8px;
+  }
+
+  .remove-button {
+    background-color: #f44336;
+    min-width: auto;
+    padding: 8px 12px;
+  }
+
+  #checkout-button {
+    font-size: 1.1rem;
+    padding: 12px 24px;
+    margin-top: 10px;
+  }
+
+  /* Mobile responsive adjustments */
+  @media (max-width: 768px) {
+    #scanner-container {
+      height: 240px;
+    }
+
+    /* Responsive table for mobile */
+    #checkout-items thead {
+      display: none;
+    }
+
+    #checkout-items tbody tr {
+      display: block;
+      margin-bottom: 15px;
+      border: 1px solid #ddd;
+      border-radius: 8px;
+      padding: 8px;
+    }
+
+    #checkout-items tbody td {
+      display: flex;
+      justify-content: space-between;
+      padding: 8px;
+      text-align: right;
+      border-bottom: 1px solid #eee;
+    }
+
+    #checkout-items tbody td:last-child {
+      border-bottom: none;
+    }
+
+    #checkout-items tbody td:before {
+      content: attr(data-label);
+      font-weight: bold;
+      text-align: left;
+      padding-right: 10px;
+    }
+  }
+
+  @media (max-width: 428px) {
+    #scanner-container {
+      height: 200px;
+    }
+
+    h1 {
+      text-align: center;
+    }
+
+    .checkout-total {
+      text-align: center;
+      font-size: 1.1rem;
+    }
+  }
+</style>
+{% endblock %} {% block content %}
+<div class="checkout-container">
+  <h1>Checkout</h1>
+
+  <div class="button-group">
+    <a href="{{ url_for('display_inventory') }}" class="button button-secondary"
+      >Go to Inventory</a
+    >
+  </div>
+
+  <div id="scanner-container">
+    <video id="scanner-video"></video>
+  </div>
+
+  <div class="scan-prompt">
+    <p>Scan a barcode to add an item to the checkout list</p>
+  </div>
+
+  <p id="error-message" class="error-message"></p>
+
+  <table id="checkout-items">
+    <thead>
+      <tr>
+        <th>Barcode</th>
+        <th>Name</th>
+        <th>Quantity</th>
+        <th>Price</th>
+        <th>Actions</th>
+      </tr>
+    </thead>
+    <tbody>
+      <!-- Items will be dynamically added here -->
+    </tbody>
+  </table>
+
+  <div class="checkout-total">Total: $<span id="total-price">0.00</span></div>
+
+  <button id="checkout-button" onclick="completeCheckout()" class="button">
+    Complete Checkout
+  </button>
+</div>
+{% endblock %} {% block scripts %}
+<script id="inventory-data" type="application/json">
+  {{ inventory|tojson|safe if inventory else "[]" }}
+</script>
+
+<script src="https://unpkg.com/@zxing/library@0.19.1"></script>
+<script>
+  // Get DOM elements
+  const videoElement = document.getElementById("scanner-video");
+  const errorMessageElement = document.getElementById("error-message");
+  const checkoutItemsTable = document
+    .getElementById("checkout-items")
+    .querySelector("tbody");
+  const totalPriceElement = document.getElementById("total-price");
+
+  // Parse inventory data from the server
+  let backendInventory = [];
+  try {
+    const inventoryDataElement = document.getElementById("inventory-data");
+    if (inventoryDataElement && inventoryDataElement.textContent) {
+      backendInventory = JSON.parse(inventoryDataElement.textContent);
+      console.log("Inventory loaded:", backendInventory.length, "items");
+    } else {
+      console.warn("Inventory data not found or empty");
+    }
+  } catch (error) {
+    console.error("Error parsing inventory data:", error);
+    errorMessageElement.textContent = "Error loading inventory data.";
+  }
+
+  // Initialize checkout items array
+  let checkoutItems = [];
+  let lastScannedBarcode = null;
+  let lastScanTime = 0;
+
+  // Update the checkout table with current items
+  function updateCheckoutTable() {
+    // Clear the table
+    checkoutItemsTable.innerHTML = "";
+
+    // Populate the table with checkout items
+    let totalPrice = 0;
+    checkoutItems.forEach((item, index) => {
+      const row = document.createElement("tr");
+
+      // For mobile responsiveness, add data-label attributes
+      row.innerHTML = `
+        <td data-label="Barcode">${item.barcode}</td>
+        <td data-label="Name">${item.name}</td>
+        <td data-label="Quantity">${item.quantity}</td>
+        <td data-label="Price">$${item.price.toFixed(2)}</td>
+        <td data-label="Actions"><button type="button" class="button remove-button" onclick="removeItem(${index})">Remove</button></td>
+      `;
+      checkoutItemsTable.appendChild(row);
+      totalPrice += item.price;
+    });
+
+    // Update the total price
+    totalPriceElement.textContent = totalPrice.toFixed(2);
+  }
+
+  // Remove item from checkout list
+  function removeItem(index) {
+    checkoutItems.splice(index, 1);
+    updateCheckoutTable();
+  }
+
+  // Add item to checkout list
+  function addItem(barcode, quantity = 1) {
+    // Prevent multiple scans of the same barcode in quick succession
+    const now = Date.now();
+    if (barcode === lastScannedBarcode && now - lastScanTime < 2000) {
+      return; // Ignore if same barcode scanned within 2 seconds
+    }
+
+    lastScannedBarcode = barcode;
+    lastScanTime = now;
+
+    const item = backendInventory.find(
+      (product) => product.barcode === barcode
+    );
+
+    if (!item) {
+      errorMessageElement.textContent = "Error: Item not found in inventory.";
+      return;
+    }
+
+    // Add the item to the checkout list
+    checkoutItems.push({
+      barcode: item.barcode,
+      name: item.name,
+      quantity: quantity,
+      price: item.price * quantity,
+    });
+
+    // Clear the error message and update the table
+    errorMessageElement.textContent = "";
+    updateCheckoutTable();
+
+    // Provide feedback
+    if (navigator.vibrate) {
+      navigator.vibrate(100); // Vibrate for 100ms on mobile
+    }
+  }
+
+  // Start barcode scanning
+  async function startScanning() {
+    if (navigator.mediaDevices) {
+      try {
+        // Use environment-facing camera with optimal settings for mobile
+        const stream = await navigator.mediaDevices.getUserMedia({
+          video: {
+            facingMode: "environment",
+            width: { ideal: 1280 },
+            height: { ideal: 720 },
+          },
+        });
+        videoElement.srcObject = stream;
+
+        // Wait for the video to be ready before starting playback
+        videoElement.onloadedmetadata = () => {
+          videoElement.play();
+        };
+
+        const reader = new ZXing.BrowserBarcodeReader();
+        const hints = new Map();
+        hints.set(ZXing.DecodeHintType.TRY_HARDER, true);
+
+        // Continuously scan for barcodes
+        reader.decodeFromVideoElementContinuously(
+          videoElement,
+          (result, err) => {
+            if (result) {
+              const scannedBarcode = result.text.trim();
+              addItem(scannedBarcode);
+            }
+
+            if (err && !(err instanceof ZXing.NotFoundException)) {
+              console.error("Barcode scanning error:", err);
+            }
+          },
+          hints
+        );
+      } catch (error) {
+        console.error("Error accessing camera:", error);
+        document.getElementById("scanner-container").innerHTML =
+          "<p style='padding:15px;text-align:center;'>Error accessing camera. Please ensure your browser has permission to access the camera.</p>";
+      }
+    } else {
+      console.warn("getUserMedia() is not supported by your browser");
+      document.getElementById("scanner-container").innerHTML =
+        "<p style='padding:15px;text-align:center;'>Camera access not supported on your device.</p>";
+    }
+  }
+
+  // Complete checkout process
+  async function completeCheckout() {
+    if (checkoutItems.length === 0) {
+      errorMessageElement.textContent = "No items in the checkout list.";
+      return;
+    }
+
+    try {
+      // Show loading state
+      const checkoutButton = document.getElementById("checkout-button");
+      const originalText = checkoutButton.textContent;
+      checkoutButton.textContent = "Processing...";
+      checkoutButton.disabled = true;
+
+      const response = await fetch("/complete_checkout", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ checkoutItems }),
+      });
+
+      const result = await response.json();
+
+      if (result.success) {
+        alert(result.message);
+        window.location.href = "/inventory";
+      } else {
+        errorMessageElement.textContent = result.message;
+        // Reset button
+        checkoutButton.textContent = originalText;
+        checkoutButton.disabled = false;
+      }
+    } catch (error) {
+      console.error("Error completing checkout:", error);
+      errorMessageElement.textContent = "An error occurred during checkout.";
+      document.getElementById("checkout-button").disabled = false;
+    }
+  }
+
+  // Initialize the scanner when the page loads
+  document.addEventListener("DOMContentLoaded", function () {
+    startScanning();
+  });
+</script>
+{% endblock %}

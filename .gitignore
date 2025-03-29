@@ -1,0 +1,25 @@
+# Environment
+venv/
+env/
+.env
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Database
+*.db
+*.sqlite
+
+# OS specific
+.DS_Store
+Thumbs.db
+
+# Editor settings
+.vscode/
+.idea/
+
+# Logs
+*.log
+
+# Dependencies (if using npm)
+node_modules/

@@ -1,0 +1,235 @@
+{% extends "base.html" %} {% block title %}Add New Item{% endblock %} {% block
+head %}
+<style>
+  /* Additional styles specific to this page */
+  #scanner-container {
+    width: 100%;
+    max-width: 600px;
+    height: 300px;
+    border: 1px solid #ccc;
+    margin: 0 auto 20px;
+    border-radius: 8px;
+    overflow: hidden;
+    position: relative;
+  }
+
+  #scanner-video {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+  }
+
+  .form-container {
+    max-width: 800px;
+    margin: 0 auto;
+  }
+
+  .scan-status {
+    font-size: 14px;
+    background-color: #e8f5e9;
+    padding: 8px 12px;
+    border-radius: 4px;
+    margin-bottom: 16px;
+    border-left: 3px solid #4caf50;
+  }
+
+  @media (max-width: 768px) {
+    #scanner-container {
+      height: 240px;
+    }
+  }
+
+  @media (max-width: 428px) {
+    #scanner-container {
+      height: 200px;
+    }
+
+    h1 {
+      text-align: center;
+    }
+  }
+</style>
+{% endblock %} {% block content %}
+<h1>Add New Item</h1>
+<div class="form-container">
+  <div id="scanner-container">
+    <video id="scanner-video"></video>
+  </div>
+
+  <div class="scan-status">
+    <p>Scan a barcode or enter item details manually below</p>
+  </div>
+
+  {% if error %}
+  <p id="error-message" class="error-message">{{ error }}</p>
+  {% else %}
+  <p id="error-message" class="error-message"></p>
+  {% endif %}
+
+  <form method="POST" id="add-item-form">
+    <div class="form-group">
+      <label for="barcode">Barcode:</label>
+      <input
+        type="text"
+        id="barcode"
+        name="barcode"
+        required
+        autocomplete="off"
+        inputmode="numeric"
+      />
+    </div>
+
+    <div class="form-group">
+      <label for="name">Name:</label>
+      <input type="text" id="name" name="name" required autocomplete="off" />
+    </div>
+
+    <div class="form-group">
+      <label for="quantity">Quantity:</label>
+      <input
+        type="number"
+        id="quantity"
+        name="quantity"
+        value="1"
+        min="0"
+        required
+        inputmode="numeric"
+        pattern="[0-9]*"
+      />
+    </div>
+
+    <div class="form-group">
+      <label for="price">Price ($):</label>
+      <input
+        type="number"
+        step="0.01"
+        id="price"
+        name="price"
+        value="0.00"
+        min="0"
+        required
+        inputmode="decimal"
+        pattern="[0-9]*\.?[0-9]+"
+      />
+    </div>
+
+    <div class="form-group">
+      <label for="description">Description:</label>
+      <textarea id="description" name="description"></textarea>
+    </div>
+
+    <div class="button-group">
+      <button type="submit" class="button">Add Item</button>
+      <a
+        href="{{ url_for('display_inventory') }}"
+        class="button button-secondary"
+        >Back to Inventory</a
+      >
+    </div>
+  </form>
+</div>
+{% endblock %} {% block scripts %}
+<!-- Store Jinja2 data in a separate script tag to avoid JavaScript syntax errors -->
+<script id="existing-barcodes-data" type="application/json">
+  {{ existing_barcodes|tojson|safe if existing_barcodes else "[]" }}
+</script>
+
+<script src="https://unpkg.com/@zxing/library@0.19.1"></script>
+<script>
+  const videoElement = document.getElementById("scanner-video");
+  const barcodeInputElement = document.getElementById("barcode");
+  const errorMessageElement = document.getElementById("error-message");
+
+  // Get existing barcodes from the data script tag
+  const existingBarcodesElement = document.getElementById(
+    "existing-barcodes-data"
+  );
+  const existingBarcodes = JSON.parse(
+    existingBarcodesElement.textContent || "[]"
+  );
+
+  // Form validation
+  document
+    .getElementById("add-item-form")
+    .addEventListener("submit", function (event) {
+      const barcode = barcodeInputElement.value.trim();
+
+      if (existingBarcodes.includes(barcode)) {
+        event.preventDefault();
+        errorMessageElement.textContent =
+          "Error: Barcode already exists in the inventory.";
+      }
+    });
+
+  document.addEventListener("DOMContentLoaded", () => {
+    startScanning();
+  });
+
+  async function startScanning() {
+    if (navigator.mediaDevices) {
+      try {
+        // Use the environment-facing camera on mobile with optimal resolution
+        const stream = await navigator.mediaDevices.getUserMedia({
+          video: {
+            facingMode: "environment",
+            width: { ideal: 1280 },
+            height: { ideal: 720 },
+          },
+        });
+
+        videoElement.srcObject = stream;
+
+        // Wait for the video to be ready before starting playback
+        videoElement.onloadedmetadata = () => {
+          videoElement.play();
+        };
+
+        const reader = new ZXing.BrowserBarcodeReader();
+        const hints = new Map();
+        hints.set(ZXing.DecodeHintType.TRY_HARDER, true);
+
+        // Continuously scan for barcodes
+        reader.decodeFromVideoElementContinuously(
+          videoElement,
+          (result, err) => {
+            if (result) {
+              const scannedBarcode = result.text.trim();
+
+              // Automatically fill the barcode input field
+              barcodeInputElement.value = scannedBarcode;
+
+              // Add vibration feedback on mobile
+              if (navigator.vibrate) {
+                navigator.vibrate(100);
+              }
+
+              // Check if the barcode already exists
+              if (existingBarcodes.includes(scannedBarcode)) {
+                errorMessageElement.textContent =
+                  "Warning: Barcode already exists in inventory.";
+              } else {
+                errorMessageElement.textContent = ""; // Clear error message
+                console.log("Barcode detected:", scannedBarcode);
+              }
+            }
+
+            if (err && !(err instanceof ZXing.NotFoundException)) {
+              console.error(err);
+            }
+          },
+          hints
+        );
+      } catch (error) {
+        console.error("Error accessing camera:", error);
+        document.getElementById("scanner-container").innerHTML =
+          "<p style='padding:15px;text-align:center;'>Error accessing camera. Please ensure your browser has permission to access the camera.</p>";
+      }
+    } else {
+      console.warn("getUserMedia() is not supported by your browser");
+      document.getElementById("scanner-container").innerHTML =
+        "<p style='padding:15px;text-align:center;'>Camera access not supported. Please enter barcode manually.</p>";
+    }
+  }
+</script>
+{% endblock %}

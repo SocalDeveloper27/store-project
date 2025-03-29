@@ -1,0 +1,177 @@
+{% extends "base.html" %} {% block title %}Edit Item{% endblock %} {% block head
+%}
+<style>
+  /* Additional styles specific to edit page */
+  .edit-container {
+    max-width: 800px;
+    margin: 0 auto;
+  }
+
+  .item-details {
+    background-color: #f0f8ff;
+    border-left: 4px solid #2196f3;
+    padding: 12px 15px;
+    margin-bottom: 20px;
+    border-radius: 4px;
+  }
+
+  .barcode-info {
+    font-style: italic;
+    color: #666;
+    font-size: 14px;
+    margin-top: 5px;
+    margin-bottom: 0;
+  }
+
+  /* Responsive adjustments */
+  @media (max-width: 768px) {
+    .button-group {
+      flex-direction: column;
+    }
+
+    .button {
+      width: 100%;
+      margin: 5px 0;
+    }
+
+    h1 {
+      margin-bottom: 15px;
+    }
+  }
+
+  @media (max-width: 428px) {
+    .item-details {
+      padding: 10px;
+    }
+
+    h1 {
+      text-align: center;
+    }
+  }
+</style>
+{% endblock %} {% block content %}
+<div class="edit-container">
+  <h1>Edit Item</h1>
+
+  <div class="item-details">
+    <p>
+      <strong>Editing:</strong> {{ item.name }} (Barcode: {{ item.barcode }})
+    </p>
+  </div>
+
+  {% if error %}
+  <p id="error-message" class="error-message">{{ error }}</p>
+  {% endif %}
+
+  <form method="POST">
+    <div class="form-group">
+      <label for="barcode">Barcode:</label>
+      <input
+        type="text"
+        id="barcode"
+        name="barcode"
+        value="{{ item.barcode }}"
+        required
+        autocomplete="off"
+        inputmode="numeric"
+      />
+      <p class="barcode-info">
+        Changing the barcode will create a new entry if the barcode doesn't
+        exist.
+      </p>
+    </div>
+
+    <div class="form-group">
+      <label for="name">Name:</label>
+      <input
+        type="text"
+        id="name"
+        name="name"
+        value="{{ item.name }}"
+        required
+        autocomplete="off"
+      />
+    </div>
+
+    <div class="form-group">
+      <label for="quantity">Quantity:</label>
+      <input
+        type="number"
+        id="quantity"
+        name="quantity"
+        value="{{ item.quantity }}"
+        min="0"
+        required
+        inputmode="numeric"
+        pattern="[0-9]*"
+      />
+    </div>
+
+    <div class="form-group">
+      <label for="price">Price ($):</label>
+      <input
+        type="number"
+        step="0.01"
+        id="price"
+        name="price"
+        value="{{ item.price }}"
+        min="0"
+        required
+        inputmode="decimal"
+        pattern="[0-9]*\.?[0-9]+"
+      />
+    </div>
+
+    <div class="form-group">
+      <label for="description">Description:</label>
+      <textarea id="description" name="description">
+{{ item.description }}</textarea
+      >
+    </div>
+
+    <div class="button-group">
+      <button type="submit" class="button">Save Changes</button>
+      <a
+        href="{{ url_for('delete_item', barcode=item.barcode) }}"
+        class="button button-danger"
+        onclick="return confirm('Are you sure you want to delete this item?')"
+        >Delete Item</a
+      >
+    </div>
+  </form>
+
+  <div class="button-group">
+    <a href="{{ url_for('display_inventory') }}" class="button button-secondary"
+      >Back to Inventory</a
+    >
+  </div>
+</div>
+{% endblock %} {% block scripts %}
+<script>
+  document.addEventListener("DOMContentLoaded", function () {
+    const form = document.querySelector("form");
+    const quantityInput = document.getElementById("quantity");
+    const priceInput = document.getElementById("price");
+
+    form.addEventListener("submit", function (event) {
+      // Validate quantity is a positive number
+      if (parseInt(quantityInput.value) < 0) {
+        event.preventDefault();
+        alert("Quantity must be a positive number");
+        return;
+      }
+
+      // Validate price is a positive number
+      if (parseFloat(priceInput.value) < 0) {
+        event.preventDefault();
+        alert("Price must be a positive number");
+        return;
+      }
+    });
+
+    // Fix textarea whitespace issues
+    const textarea = document.getElementById("description");
+    textarea.value = textarea.value.trim();
+  });
+</script>
+{% endblock %}
