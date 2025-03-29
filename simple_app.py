@@ -31,9 +31,19 @@ class Item(db.Model):
         }
 
 # Initialize database
-@app.before_first_request
-def initialize_database():
+with app.app_context():
     db.create_all()
+
+# Add sample item if none exist
+@app.before_request
+def check_database():
+    if not hasattr(check_database, 'initialized'):
+        with app.app_context():
+            if Item.query.count() == 0:
+                sample = Item(name="Sample Product", barcode="12345", price=9.99)
+                db.session.add(sample)
+                db.session.commit()
+        check_database.initialized = True
 
 @app.route('/')
 def home():

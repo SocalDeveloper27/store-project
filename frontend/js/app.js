@@ -1,4 +1,3 @@
-// Import the API client
 import api from "./api.js";
 
 // Application state

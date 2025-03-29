@@ -1,5 +1,14 @@
 // API URL - Change this to your deployed backend URL when deployed
-const API_BASE_URL = "https://store-project-api-h325.onrender.com";
+let API_BASE_URL = "https://store-project-api-h325.onrender.com";
+
+// For development/testing with a local backend
+if (
+  window.location.hostname === "localhost" ||
+  window.location.hostname === "127.0.0.1"
+) {
+  console.log("Using local development API endpoint");
+  API_BASE_URL = "http://localhost:5000";
+}
 
 // API client for communicating with backend
 const api = {
@@ -113,15 +122,6 @@ const api = {
     }
   },
 };
-
-// For development/testing with a local backend
-if (
-  window.location.hostname === "localhost" ||
-  window.location.hostname === "127.0.0.1"
-) {
-  console.log("Using local development API endpoint");
-  const API_BASE_URL = "http://localhost:5000";
-}
 
 // Export the API object
 export default api;
