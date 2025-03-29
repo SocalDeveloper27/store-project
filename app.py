@@ -2,6 +2,7 @@ from flask import Flask, render_template, request, redirect, url_for, jsonify
 from flask_sqlalchemy import SQLAlchemy
 from flask_cors import CORS
 import os
+import requests
 
 app = Flask(__name__)
 CORS(app)  # Enable CORS for all routes
@@ -47,16 +48,26 @@ with app.app_context():
         db.session.bulk_save_objects(sample_items)
         db.session.commit()
 
-# API Routes
-@app.route('/api/inventory', methods=['GET'])
+# Use Render server as the backend
+API_BASE_URL = os.environ.get('RENDER_API_URL', 'https://store-project-api-h325.onrender.com')
+
+@app.route('/api/inventory')
 def get_inventory():
-    """Return all inventory items as JSON"""
     try:
-        inventory = [item.to_dict() for item in InventoryItem.query.all()]
-        return jsonify(inventory)
+        # Forward the request to the Render server
+        response = requests.get(f"{API_BASE_URL}/api/inventory")
+        return jsonify(response.json()), response.status_code
     except Exception as e:
-        app.logger.error(f"Error getting inventory: {str(e)}")
-        return jsonify({'error': str(e)}), 500
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/api/inventory/<barcode>', methods=['DELETE'])
+def delete_item(barcode):
+    try:
+        # Forward the DELETE request to the Render server
+        response = requests.delete(f"{API_BASE_URL}/api/inventory/{barcode}")
+        return jsonify(response.json()), response.status_code
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
 
 @app.route('/api/inventory/<barcode>', methods=['GET'])
 def get_item(barcode):
@@ -109,22 +120,6 @@ def update_item_api(barcode):
         return jsonify(item.to_dict())
     except Exception as e:
         app.logger.error(f"Error updating item via API: {str(e)}")
-        db.session.rollback()
-        return jsonify({'error': str(e)}), 500
-
-@app.route('/api/inventory/<barcode>', methods=['DELETE'])
-def delete_item_api(barcode):
-    """Delete an item via API"""
-    try:
-        item = InventoryItem.query.filter_by(barcode=barcode).first()
-        if not item:
-            return jsonify({'error': 'Item not found'}), 404
-            
-        db.session.delete(item)
-        db.session.commit()
-        return jsonify({'success': True, 'message': 'Item deleted successfully'})
-    except Exception as e:
-        app.logger.error(f"Error deleting item via API: {str(e)}")
         db.session.rollback()
         return jsonify({'error': str(e)}), 500
 
