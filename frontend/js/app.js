@@ -149,6 +149,11 @@ function stopCamera() {
 
 // Render the inventory view
 function renderInventoryView() {
+  // Stop any active camera when switching to inventory view
+  if (window.cameraHandler) {
+    window.cameraHandler.stopCamera();
+  }
+
   if (state.inventory.length === 0) {
     app.innerHTML = `
       <div class="inventory-container">
@@ -264,54 +269,50 @@ function renderInventoryView() {
 function renderCheckoutView() {
   app.innerHTML = `
     <h2>Checkout</h2>
-    <div id="error-message" class="error-message"></div>
     
-    ${createScannerHTML()}
-    
-    <!-- Rest of your checkout view HTML -->
-    <div class="checkout-items">
-      <!-- checkout items table -->
+    <div class="scanner-container" id="scanner-container">
+      <video id="scanner-video" playsinline autoplay muted></video>
+      <div class="scanner-overlay">
+        <div class="scanner-guide"></div>
+      </div>
     </div>
+    <div id="scan-status" class="scan-status">Starting camera...</div>
+    
+    <!-- Rest of your checkout view -->
   `;
-  
-  // Add your event listeners
-  
-  // Initialize scanner with callback for checkout
-  setupBarcodeScanner((barcode) => {
-    // Process the scanned barcode for checkout
-    addItemToCheckout(barcode);
-  });
+
+  // Add event listeners for checkout buttons...
+
+  // Use camera.js to initialize camera for checkout view
+  if (window.cameraHandler) {
+    window.cameraHandler.initializeCamera("checkout");
+  }
+
+  // Update checkout display...
 }
 
 // Render the add item view
 function renderAddItemView() {
   app.innerHTML = `
-    <h2>Add Item</h2>
+    <h2>Add New Item</h2>
     
-    ${createScannerHTML()}
-    
-    <form id="add-item-form">
-      <!-- Your form fields -->
-      <div class="form-group">
-        <label for="barcode">Barcode:</label>
-        <input type="text" id="barcode" name="barcode" required />
+    <div class="scanner-container" id="scanner-container">
+      <video id="scanner-video" playsinline autoplay muted></video>
+      <div class="scanner-overlay">
+        <div class="scanner-guide"></div>
       </div>
-      <!-- Other fields -->
-    </form>
-  `;
-  
-  // Add your event listeners
-  
-  // Initialize scanner with callback for add item
-  setupBarcodeScanner((barcode) => {
-    // Fill the barcode field with the scanned value
-    document.getElementById("barcode").value = barcode;
+    </div>
+    <div id="scan-status" class="scan-status">Starting camera...</div>
     
-    // Visual feedback
-    const input = document.getElementById("barcode");
-    input.classList.add("scan-success");
-    setTimeout(() => input.classList.remove("scan-success"), 1500);
-  });
+    <!-- Rest of your add item form -->
+  `;
+
+  // Add event listeners for form submission...
+
+  // Use camera.js to initialize camera for add item view
+  if (window.cameraHandler) {
+    window.cameraHandler.initializeCamera("addItem");
+  }
 }
 
 // Render the edit item view
@@ -445,79 +446,85 @@ async function setupBarcodeScanner(onBarcodeScanned) {
   console.log("Setting up barcode scanner...");
   const scanStatus = document.getElementById("scan-status");
   const videoElement = document.getElementById("scanner-video");
-  
+
   if (!videoElement) {
     console.error("Video element not found");
     return;
   }
-  
+
   // Stop any existing camera first
   stopCamera();
-  
+
   try {
     // Update status
     if (scanStatus) scanStatus.textContent = "Requesting camera access...";
-    
+
     // Check for camera support
     if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
       console.error("MediaDevices API not supported");
-      if (scanStatus) scanStatus.textContent = "Camera API not supported by your browser";
+      if (scanStatus)
+        scanStatus.textContent = "Camera API not supported by your browser";
       return;
     }
-    
+
     // Test for secure context
     if (!window.isSecureContext) {
       console.warn("Not in secure context, camera may not work");
-      if (scanStatus) scanStatus.textContent = "Camera requires HTTPS (secure context)";
+      if (scanStatus)
+        scanStatus.textContent = "Camera requires HTTPS (secure context)";
     }
-    
+
     // Set attributes for iOS compatibility
     videoElement.setAttribute("playsinline", true);
     videoElement.setAttribute("autoplay", true);
     videoElement.setAttribute("muted", true);
-    
+
     // Force appropriate constraints for barcode scanning
     const constraints = {
       audio: false,
       video: {
-        facingMode: "environment",  // Use back camera
+        facingMode: "environment", // Use back camera
         width: { ideal: 1280 },
         height: { ideal: 720 },
-        focusMode: "continuous"     // Request continuous autofocus
-      }
+        focusMode: "continuous", // Request continuous autofocus
+      },
     };
-    
+
     console.log("Requesting camera with constraints:", constraints);
     const stream = await navigator.mediaDevices.getUserMedia(constraints);
-    
+
     // Save stream for later cleanup
     activeCameraStream = stream;
     videoElement.srcObject = stream;
-    
-    if (scanStatus) scanStatus.textContent = "Camera activated, preparing scanner...";
-    
+
+    if (scanStatus)
+      scanStatus.textContent = "Camera activated, preparing scanner...";
+
     // Add a delay before initializing scanner
-    videoElement.onloadedmetadata = function() {
-      videoElement.play()
+    videoElement.onloadedmetadata = function () {
+      videoElement
+        .play()
         .then(() => {
           console.log("Video is playing, initializing scanner");
-          if (scanStatus) scanStatus.textContent = "Scanner initialized, ready to scan";
-          
+          if (scanStatus)
+            scanStatus.textContent = "Scanner initialized, ready to scan";
+
           // Initialize barcode scanner with a slight delay
           setTimeout(() => {
             initZXingBarcodeScanner(videoElement, onBarcodeScanned);
           }, 1000);
         })
-        .catch(err => {
+        .catch((err) => {
           console.error("Error playing video:", err);
-          if (scanStatus) scanStatus.textContent = `Error starting video: ${err.message}`;
+          if (scanStatus)
+            scanStatus.textContent = `Error starting video: ${err.message}`;
         });
     };
   } catch (error) {
     console.error("Camera access error:", error);
     if (scanStatus) {
       scanStatus.textContent = `Camera error: ${error.name}. ${
-        error.name === "NotAllowedError" 
+        error.name === "NotAllowedError"
           ? "Please grant camera permission in your browser settings."
           : error.message
       }`;
@@ -533,14 +540,14 @@ function initZXingBarcodeScanner(videoElement, onBarcodeScanned) {
     if (status) status.textContent = "Barcode scanner library not loaded";
     return;
   }
-  
+
   try {
     console.log("Creating ZXing reader");
     const codeReader = new ZXing.BrowserMultiFormatReader();
-    
+
     // Debug info to see what formats are supported
     console.log("Supported formats:", ZXing.BarcodeFormat);
-    
+
     // Start continuous scanning with debug mode
     console.log("Starting continuous decode");
     codeReader.decodeFromVideoElementContinuously(
@@ -550,36 +557,39 @@ function initZXingBarcodeScanner(videoElement, onBarcodeScanned) {
           const scannedBarcode = result.text.trim();
           console.log("✅ BARCODE DETECTED:", scannedBarcode);
           console.log("Format:", result.format);
-          
+
           // Update status
           const status = document.getElementById("scan-status");
-          if (status) status.innerHTML = `<strong>Scanned:</strong> ${scannedBarcode}`;
-          
+          if (status)
+            status.innerHTML = `<strong>Scanned:</strong> ${scannedBarcode}`;
+
           // Vibration feedback
           if (navigator.vibrate) {
             navigator.vibrate(100);
           }
-          
+
           // Call the callback with the result
-          if (typeof onBarcodeScanned === 'function') {
+          if (typeof onBarcodeScanned === "function") {
             onBarcodeScanned(scannedBarcode);
           }
         }
-        
+
         if (error && !(error instanceof ZXing.NotFoundException)) {
           console.error("Scanning error:", error);
           const status = document.getElementById("scan-status");
-          if (status) status.textContent = `Scanner error: ${error.message || error}`;
+          if (status)
+            status.textContent = `Scanner error: ${error.message || error}`;
         }
       }
     );
-    
+
     // Store scanner for cleanup
     window.currentScanner = codeReader;
   } catch (error) {
     console.error("Failed to initialize barcode scanner:", error);
     const status = document.getElementById("scan-status");
-    if (status) status.textContent = `Scanner initialization failed: ${error.message}`;
+    if (status)
+      status.textContent = `Scanner initialization failed: ${error.message}`;
   }
 }
 
@@ -617,6 +627,9 @@ function addItemToCheckout(barcode) {
 
   renderCheckoutView();
 }
+
+// Make addItemToCheckout globally accessible for the camera handler
+window.addItemToCheckout = addItemToCheckout;
 
 // Calculate total price for checkout
 function calculateTotal() {

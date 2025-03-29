@@ -10,9 +10,10 @@
 [[headers]]
   for = "/*"
   [headers.values]
-    Content-Security-Policy = "default-src * 'self' 'unsafe-inline' 'unsafe-eval' data: blob:; camera 'self'"
+    Content-Security-Policy = "default-src * 'self' 'unsafe-inline' 'unsafe-eval' data: blob:; camera 'self'; microphone 'none'"
     Feature-Policy = "camera 'self'"
-    Permissions-Policy = "camera=self"
+    Permissions-Policy = "camera=(self), microphone=()"
+    Access-Control-Allow-Origin = "*"
 
 [[headers]]
   for = "*.js"
