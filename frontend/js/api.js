@@ -87,16 +87,46 @@ window.api = {
   // Delete an item
   async deleteItem(barcode) {
     try {
+      // First, ping the backend to wake it up if it's sleeping
+      try {
+        await fetch(`${API_BASE_URL}/`);
+      } catch (e) {
+        console.log("Wake-up ping failed, proceeding anyway...");
+      }
+
+      // Add loading indicator to UI
+      const deleteBtn = document.querySelector(
+        `.delete-btn[data-barcode="${barcode}"]`
+      );
+      if (deleteBtn) {
+        deleteBtn.disabled = true;
+        deleteBtn.textContent = "Deleting...";
+      }
+
+      // Now make the actual delete request with a longer timeout
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 30000); // 30 second timeout
+
       const response = await fetch(`${API_BASE_URL}/api/inventory/${barcode}`, {
         method: "DELETE",
+        signal: controller.signal,
       });
+
+      clearTimeout(timeoutId);
+
       if (!response.ok) {
         const error = await response.json();
         throw new Error(error.error || "Failed to delete item");
       }
-      return await response.json();
+
+      return true;
     } catch (error) {
       console.error("Error deleting item:", error);
+      if (error.name === "AbortError") {
+        throw new Error(
+          "Delete request timed out. Server might be starting up, please try again."
+        );
+      }
       throw error;
     }
   },

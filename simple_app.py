@@ -4,7 +4,8 @@ from flask_cors import CORS
 import os
 
 app = Flask(__name__)
-CORS(app)
+# Configure CORS for all routes and all origins
+CORS(app, resources={r"/*": {"origins": "*", "methods": ["GET", "POST", "PUT", "DELETE", "OPTIONS"]}})
 
 # Configure database - use environment variable for production
 database_url = os.environ.get('DATABASE_URL', 'sqlite:///inventory.db')
@@ -46,14 +47,28 @@ def check_database():
         check_database.initialized = True
 
 @app.route('/')
-def home():
-    return "Hello from Store API!"
+def health_check():
+    return jsonify({"status": "ok", "message": "API is running"})
 
 @app.route('/api/inventory')
 def get_inventory():
     try:
         items = Item.query.all()
         return jsonify([item.to_dict() for item in items])
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/api/inventory/<barcode>', methods=['DELETE'])
+def delete_item(barcode):
+    try:
+        item = Item.query.filter_by(barcode=barcode).first()
+        if not item:
+            return jsonify({"error": "Item not found"}), 404
+        
+        db.session.delete(item)
+        db.session.commit()
+        
+        return jsonify({"message": "Item deleted successfully"}), 200
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
